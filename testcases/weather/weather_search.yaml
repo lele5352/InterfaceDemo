@@ -1,0 +1,35 @@
+-
+  feature: 天气网
+  story: 查询当前地天气
+  title: 验证天气网查询接口返回成功
+  request:
+    method: get
+    url: https://cy.weather.com.cn/api/v1/promo_pos?
+#    url: ${env(weather_base_url)}/api/v1/promo_pos?
+    params:
+      ids: 3
+  extract:
+    city: [text,'"msg":"(.*?)"',1]
+    id: [json,"$.data.list[0].id",0]
+    status: [json,"$.data.list[0].status",0]
+#  validate:
+#    contains:
+#      判断返回结果中包含id: [id, text]
+
+-
+  feature: 天气网
+  story: 查询当前地天气
+  title: 验证天气网查询接口返回成功
+  request:
+    method: get
+    url: https://cy.weather.com.cn/api/v1/promo_pos?
+#    url: ${env(weather_base_url)}/api/v1/promo_pos?
+    params:
+      ids:
+  extract:
+    city: [text,'"msg":"(.*?)"',1]
+    id: [json,"$.data.list[0].id",0]
+    status: [json,"$.data.list[0].status",0]
+#  validate:
+#    contains:
+#      判断返回结果中包含id: [id, text]
