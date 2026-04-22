@@ -1,0 +1,16 @@
+-
+  feature: 数据聚合
+  story: 开奖结果查询
+  title: 验证开奖结果查询成功返回
+  request:
+    method: post
+    url: https://apis.juhe.cn/lottery/query
+#    url: ${evn(juhe_base_url)}/lottery/types
+    json:
+      key: 1353bc8292f5613be35c23315c1c71b4
+      lottery_id: ${extract(ssq_id)}
+#  extract:
+#    ssq_id: [json, "$.result[0]['lottery_id']", 0]
+  validate:
+    codes: 200
+

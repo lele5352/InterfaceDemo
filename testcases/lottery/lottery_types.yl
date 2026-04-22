@@ -1,0 +1,14 @@
+-
+  feature: 数据聚合
+  story: 获取彩票列表
+  title: 验证获取彩票列表接口成功返回
+  request:
+    method: get
+    url: https://apis.juhe.cn/lottery/types
+#    url: ${evn(juhe_base_url)}/lottery/types
+    params:
+      key: 1353bc8292f5613be35c23315c1c71b4
+  extract:
+    ssq_id: [json, "$.result[0]['lottery_id']", 0]
+#  validate:
+#    codes: 200
