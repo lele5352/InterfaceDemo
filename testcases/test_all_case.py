@@ -20,31 +20,21 @@ class TestAllCase():
 def creat_testcase(yaml_path):
     @pytest.mark.parametrize("caseinfo", read_testcase(yaml_path))
     def func(self, caseinfo):
-        if isinstance(caseinfo, list):
-            for case in caseinfo:
-                logger.info(f"YAML_PATH: {yaml_path}")
-                # 校验yaml中的数据
-                case_obj = verify_yaml(case, yaml_path.name)
-                # 定制Allure报告
-                allure.dynamic.feature(case_obj.feature)
-                allure.dynamic.story(case_obj.story)
-                allure.dynamic.title(case_obj.title)
-                # 用例的标准化流程
-                logger.info(f"开始执行用例：{yaml_path.name} | 用例标题：{case_obj.title}")
-                stand_case_flow(case_obj)
-        else:
+        # 统一处理：无论单个/列表用例
+        case_list = caseinfo if isinstance(caseinfo, list) else [caseinfo]
 
-            logger.info(r"YAML_PATH: {0}".format(yaml_path))
-
-            # 校验yaml中的数据
-            case_obj = verify_yaml(caseinfo, yaml_path.name)
-            # 定制Allure报告
+        for case in case_list:
+            logger.info(f"YAML_PATH: {yaml_path}")
+            # 校验用例
+            case_obj = verify_yaml(case, yaml_path.name)
+            # Allure 报告
             allure.dynamic.feature(case_obj.feature)
             allure.dynamic.story(case_obj.story)
             allure.dynamic.title(case_obj.title)
-            # 用例的标准化流程
+            # 执行用例
             logger.info(f"开始执行用例：{yaml_path.name} | 用例标题：{case_obj.title}")
             stand_case_flow(case_obj)
+
     return func
 
 # 循环获取所有的yaml文件（一个yaml生成一个测试用例，然后把测试用例放到TestAllCase类下）
