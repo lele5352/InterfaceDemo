@@ -1,4 +1,4 @@
-import json
+# 用例结构化对象，封装feature/story/title等属性
 
 from cerberus import Validator  # 校验结构化数据（如 YAML 解析后的字典）是否符合规则
 from commons.logger import logger
@@ -27,15 +27,13 @@ schema = {
     # 提取参数（可选字典，key为提取名，value为JSONPath表达式）
     "extract": {
         "type": "dict",
-        "required": False,
-        "valueschema": {"type": "list", "empty": False}  # 限制extract的值为非空字符串
+        "required": False
     },
 
     # 校验项
     "validate": {
         "type": "dict",
-        "required": False,
-        "valuesrules": {"type": "list", "required": False}
+        "required": False
     }
 }
 

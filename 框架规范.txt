@@ -1,0 +1,73 @@
+接口自动化测试框架规则
+1.必须有的四个一级关键字:name,base_url,request,validate
+2.在request一级关键字下必须包括两个二级关键字:method,url
+3.传参方式:在request一级关键字下，通过二级关键字传递参数。
+    (1)如果是get请求，通过params传参。
+    (2)如果是post请求:
+    传json格式，通过json关键字传参。
+    传表单格式，通过data关键字传参。
+    (3)如果是文件格式，通过files关键字传参，如:
+        files:
+            media:"E:\shu.png"
+4.如果需要做接口关联，那么必须使用一级关键字:extract，框架支持json提取和正则提取:
+    提取:
+        (1)json提取方式，如:
+        extract:
+          access_token:access_token
+        (2)正则表达式提取方式，如:
+        extract:
+          access_token:'"access_token":"(.*?)"
+    取值:
+        如:
+        ${get_extract_data(access token)}
+5.热加载，当yaml需要使用动态参数时，那么可以在debug_talk.py文件中写方法调用。注意，
+    如:
+    #获取随机数的方法
+    def get_random_numnber(self,min,max):
+        return random.randint(int(min),int.(max))
+
+6.此框架支持两种断言方式:分别为equals和contains断言，
+    如:
+    validate:
+    - equals:{status_code:205}
+    - equals: {expires in: 7200}
+    - contains:access token
+7.数据驱动使用csv和一级关键字paramters实现:如:
+yaml写法:
+    parameters:
+        name-appid-secret-grant_type-assert_str: data/get_token.cs
+    CSV写法:
+        name,appid,secret,grant_type,assert_str
+        获取统一接口鉴权码access_token,wx2da648349c234bc1，73ee91547d057dec
+        appid必填检查,""，73ee91547d057dec7b37ccd5a39d40ff,client_credent
+        secret必填检查,wx2da648349c234bc1,"",client_credential,errcode
+8.日志监控，异常处理以及基础路径的设置。
+    (1)日志输出格式: [时间] [级别] [模块] 消息
+    (2)日志文件按天滚动，保留最近7天
+    (3)所有异常必须记录日志后向上抛出，不能静默吞掉异常
+    (4)基础路径通过configs/config.yaml中的base_url配置，运行时通过${env(base_url)}引用
+9.YAML测试用例文件命名规范: 以test_开头、_search.yaml结尾，如test_weather_search.yaml
+    文件存放路径: testcases/<模块名>/<模块名>_<场景>.yaml
+    每个yaml文件可包含多个测试用例，用例之间用"-"分隔
+10.环境变量管理:
+    (1)项目级环境变量放在run.env文件中，格式KEY=VALUE
+    (2)配置文件放在configs/config.yaml中，支持default/dev/prod多环境切换
+    (3)YAML中通过${env(变量名)}引用环境变量
+11.变量引用规范:
+    (1)${env(KEY)} - 引用环境变量
+    (2)${函数名(参数)} - 调用debug_talk.py中的热加载函数
+    (3)$ddt{字段名} - 数据驱动参数化取值
+    (4)${read_yaml(键名)} - 从extract.yaml中读取已提取的变量
+12.Allure报告集成:
+    (1)每个测试用例必须使用feature/story/title三个关键字标记Allure层级
+    (2)validate中的每条断言应有对应的assert_description描述
+    (3)运行命令: pytest --alluredir=reports/allure-results
+    (4)生成报告: allure serve reports/allure-results
+13.Jenkins集成:
+    (1)Jenkinsfile放置在项目根目录，使用pipeline语法
+    (2)构建步骤: 安装依赖 -> 运行测试 -> 生成Allure报告
+    (3)测试失败时邮件通知，附带Allure报告链接
+14.extract.yaml文件用于持久化接口间提取的数据，格式为键值对YAML
+    每次测试开始前自动清空，测试过程中由框架自动写入
+15.debug_talk.py中的热加载函数不需要self参数，直接定义为普通函数
+    函数名在YAML中通过${函数名(参数)}调用，支持链式调用${func1(func2(arg))}

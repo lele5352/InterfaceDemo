@@ -1,0 +1,39 @@
+-
+  feature: 论坛模块
+  story: 登陆首页接口
+  title: 步骤一:登陆商城接口
+  request:
+    method: get
+    url: ${env(base_url)}/aaa/
+    data:
+      username: $ddt{username}
+      password: $ddt{password}
+      csrf_token: ${read_yaml(csrf_token)}
+  parametrize:
+    - [ "username", "password", "test"]
+    - [ "baili", "baili123", "123"]
+    - [ "baili", "123", "123"]
+    - [ "baili123", 123, "2026-01-01"]
+  validate:
+    equals:
+      断言状态码为200: [200, status_code]
+    contains:
+      断言包含本站新帖: [本站新帖, text]
+
+-
+  feature: 公众号模块
+  story: 获取鉴权码接口
+  title: 验证获取鉴权码接口成功返回
+  request:
+    method: get
+    url: ${env(base_url)}/cgi-bin/token
+    params:
+      "appid": "aaa"
+      "secret": "bbb"
+  extract:
+    access_token: [json, "$.access_token", 0]
+  validate:
+    equals:
+      断言状态码为200: [200, status_code]
+    contains:
+      断言包含access_token: [access_token, json]

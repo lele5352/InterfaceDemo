@@ -1,158 +1,156 @@
+"""
+响应数据提取引擎 - 支持 JSONPath 和正则表达式提取
+"""
+
 import re
-import os
+from typing import Any, List, Optional, Tuple, Union
+
 import jsonpath
-import yaml
+
 from commons.logger import logger
+from commons.settings import config
+from commons.yaml_util import write_extract_yaml
 
 
-# 写入数据到YAML
-def write_yaml(data, file_path='./extract.yaml'):
+class ExtractEngine:
+    """响应数据提取引擎
+
+    支持两种提取方式:
+    1. JSONPath 提取: [json, "$.data.token", 0]
+    2. 正则提取:     [text, '"token":"(.*?)"', 1]
     """
-    写入数据到YAML文件（追加模式）
-    :param data: 要写入的数据（dict/list等）
-    :param file_path: YAML文件路径
-    :return: bool
-    """
-    try:
-        # 确保目录存在
-        dir_path = os.path.dirname(file_path)
-        if dir_path and not os.path.exists(dir_path):
-            os.makedirs(dir_path)
 
-        with open(file_path, encoding='utf-8', mode='a+') as f:
-            yaml.safe_dump(data, stream=f, allow_unicode=True, sort_keys=False)
-        logger.info(f"数据写入{file_path}成功：{data}")
-        return True
-    except Exception as e:
-        logger.error(f"数据写入{file_path}失败：{str(e)}", exc_info=True)
-        return False
+    def extract(self, response, extract_config: dict) -> dict:
+        """执行响应数据提取
 
+        config 格式:
+            var_name: [json, "$.data.token", 0]     # JSONPath + 索引
+            var_name: [text, '"token":"(.*?)"', 1]   # 正则 + 分组索引
 
-# 读取YAML指定key的值
-def read_yaml(key, file_path='./extract.yaml'):
-    """
-    读取YAML文件中指定key的值
-    :param key: 要读取的键
-    :param file_path: YAML文件路径
-    :return: 对应值 | None
-    """
-    try:
-        if not os.path.exists(file_path):
-            logger.warning(f"YAML文件不存在：{file_path}")
-            return None
+        Args:
+            response: requests.Response 对象
+            extract_config: 提取配置字典
 
-        with open(file_path, encoding='utf-8', mode='r') as f:
-            all_value = yaml.safe_load(f) or {}  # 避免文件为空时报错
-            if key not in all_value:
-                logger.warning(f"YAML文件中未找到key：{key}")
-                return None
-            return all_value[key]
-    except Exception as e:
-        logger.error(f"读取YAML失败：{str(e)}", exc_info=True)
-        return None
+        Returns:
+            提取结果字典 {var_name: value, ...}
+        """
+        if not extract_config:
+            return {}
 
+        results = {}
+        for key, conf in extract_config.items():
+            if not isinstance(conf, (list, tuple)) or len(conf) < 2:
+                logger.warning(f"提取配置格式错误: {key}={conf}")
+                continue
 
-# 清空YAML文件
-def clear_yaml(file_path='./extract.yaml'):
-    """清空YAML文件内容"""
-    try:
-        with open(file_path, encoding='utf-8', mode='w') as f:
-            f.truncate()  # 明确清空文件
-        logger.info(f"YAML文件已清空：{file_path}")
-        return True
-    except Exception as e:
-        logger.error(f"清空YAML失败：{str(e)}", exc_info=True)
-        return False
+            method = conf[0]        # "json" 或 "text"
+            rule = conf[1]          # JSONPath 或 正则
+            index = int(conf[2]) if len(conf) > 2 else 0  # 提取索引/分组
 
+            value = self._extract(response, method, rule, index)
+            if value is not None:
+                results[key] = value
+                logger.info(f"提取成功: {key}={value}")
 
-# 读取测试用例（YAML格式）
-def read_testcase(path):
-    """
-    读取测试用例文件（支持单文件/目录）
-    :param path: 用例文件路径或目录路径
-    :return: 用例数据列表 | None
-    """
-    try:
-        test_cases = []
-        path = str(path)
-        # 如果是目录，遍历所有YAML文件
-        if os.path.isdir(path):
-            for file_name in os.listdir(path):
-                if file_name.endswith(('.yaml', '.yml')):
-                    file_path = os.path.join(path, file_name)
-                    with open(file_path, encoding='utf-8', mode='r') as f:
-                        case = yaml.safe_load(f)
-                        if case:
-                            test_cases.append(case)
-        # 如果是文件，直接读取
-        elif os.path.isfile(path) and path.endswith(('.yaml', '.yml')):
-            with open(path, encoding='utf-8', mode='r') as f:
-                case = yaml.safe_load(f)
-                if case:
-                    test_cases.append(case)
-                    logger.info("读取测试用例:{0}".format(case))
-                else:
-                    logger.info()
-        else:
-            logger.error(f"用例路径无效（非YAML文件/目录）：{path}")
-            return None
-        logger.info(f"读取测试用例成功，共{len(test_cases)}条")
-        return test_cases
-    except Exception as e:
-        logger.error(f"读取测试用例失败：{str(e)}", exc_info=True)
-        return None
+                # 写入 extract.yaml 和内存变量池
+                self._save_extracted(key, value)
 
+        return results
 
-# 提取响应数据（JSONPath/正则）
-def get_data(method, obj, rule):
-    """
-    提取数据
-    :param method: 提取方式（json/text）
-    :param obj: 数据源（JSON响应体/文本）
-    :param rule: 提取规则（JSONPath表达式/正则表达式）
-    :return: 提取结果 | None
-    """
-    try:
-        if method == "json":
-            result = jsonpath.jsonpath(obj, rule)
-            # JSONPath返回False表示无匹配，统一返回None
-            if result:
-                return result
+    def _extract(self, response, method: str, rule: str, index: int) -> Any:
+        """根据提取方式执行提取
+
+        Args:
+            response: requests.Response 对象
+            method: 提取方式 (json/text)
+            rule: 提取规则 (JSONPath/正则表达式)
+            index: 结果索引 / 正则分组索引
+
+        Returns:
+            提取的值，失败返回 None
+        """
+        try:
+            if method == "json":
+                return self._extract_by_json(response, rule, index)
+            elif method == "text":
+                return self._extract_by_regex(response, rule, index)
             else:
-                logger.error(f"【{method}】数据提取失败！！！")
+                logger.error(f"不支持的提取方式: {method}（仅支持 json/text）")
                 return None
-        elif method == "text":
-            result = re.search(rule, obj)
-            if result:
-                return result
-            else:
-                logger.error(f"【{method}】数据提取失败！！！")
-                return None
-        else:
-            logger.error(f"不支持的提取方法：{method}（仅支持json/text）")
+        except Exception as e:
+            logger.error(f"提取异常 [{method}] rule={rule}: {e}", exc_info=True)
             return None
-    except Exception as e:
-        logger.error(f"数据提取失败：{str(e)}", exc_info=True)
-        return None
+
+    def _extract_by_json(self, response, jsonpath_expr: str, index: int) -> Any:
+        """JSONPath 提取
+
+        Args:
+            response: requests.Response 对象
+            jsonpath_expr: JSONPath 表达式，如 "$.data.token"
+            index: 结果列表中的索引
+
+        Returns:
+            提取的值
+        """
+        try:
+            data = response.json()
+        except ValueError:
+            logger.error("响应不是有效的 JSON 格式")
+            return None
+
+        result = jsonpath.jsonpath(data, jsonpath_expr)
+        if result is False:
+            logger.error(f"JSONPath 未匹配: {jsonpath_expr}")
+            return None
+
+        if isinstance(result, list) and index < len(result):
+            return result[index]
+
+        logger.error(f"JSONPath 索引超界: index={index}, 长度={len(result) if isinstance(result, list) else 1}")
+        return result[0] if result else None
+
+    def _extract_by_regex(self, response, pattern: str, group_index: int) -> Any:
+        """正则表达式提取
+
+        Args:
+            response: requests.Response 对象
+            pattern: 正则表达式，如 '"token":"(.*?)"'
+            group_index: 分组索引，0=完整匹配, 1=第一个分组
+
+        Returns:
+            提取的值
+        """
+        text = response.text
+        match = re.search(pattern, text)
+        if not match:
+            logger.error(f"正则未匹配: {pattern}")
+            return None
+
+        if group_index > match.lastindex:
+            logger.error(f"正则分组索引超界: group_index={group_index}, lastindex={match.lastindex}")
+            return None
+
+        return match.group(group_index)
+
+    def _save_extracted(self, key: str, value: Any):
+        """保存提取结果到 extract.yaml 和内存变量池"""
+        write_extract_yaml({key: value})
+
+        # 写入内存变量池
+        config.set_variable(key, value)
+
+    def extract_response_info(self, response, extract_info: dict) -> dict:
+        """兼容旧接口 - 提取响应中的关联字段信息
+
+        Args:
+            response: requests.Response 对象
+            extract_info: 提取配置字典
+
+        Returns:
+            提取结果字典
+        """
+        return self.extract(response, extract_info)
 
 
-def extract_res_info(res, extract_info, case_name):
-    """
-    提取接口内关联字段信息并保存
-    :param res: 响应结果
-    :param extract_info:
-    :param case_name:
-    :return:
-    """
-
-    for key, extract_conf in extract_info.items():
-        method = extract_conf[0]
-        rule = extract_conf[1]
-        index = extract_conf[2]
-        data = res.json() if method == 'json' else res.text
-        extract_value = get_data(method, data, rule)
-        if extract_value:
-            extract_result = {}
-            extract_result[key] = extract_value[index]
-            write_yaml(extract_result)  # 写入YAML
-    return
+# 全局提取引擎实例
+extract_engine = ExtractEngine()

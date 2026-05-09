@@ -1,73 +1,84 @@
-from commons.request_util import RequestUtil
-from commons.extract_util import extract_res_info, get_data
+"""
+主执行器 - 编排测试用例执行流程
+"""
+
+import sys
+from typing import Any, Dict, Optional
+
+from commons.assert_util import ResponseValidator
+from commons.extract_util import extract_engine
 from commons.logger import logger
+from commons.request_util import request_engine
+from commons.settings import config
 
 
-def stand_case_flow(test_case):
+def execute_test_case(case_obj) -> Dict[str, Any]:
+    """执行单个测试用例
+
+    流程:
+    1. 提取用例元信息 (feature/story/title)
+    2. 发送 HTTP 请求
+    3. 提取响应数据（如需）
+    4. 校验响应（如需）
+
+    Args:
+        case_obj: TestCaseObj 对象
+
+    Returns:
+        执行结果字典 {title, status}
     """
-    标准化测试用例执行流程
-    :param test_case: case_obj对象
-    :return: 执行结果（dict）
-    """
+    case_title = getattr(case_obj, "title", "未命名用例")
+    request_info = getattr(case_obj, "request", {})
+    extract_info = getattr(case_obj, "extract", {})
+    validate_info = getattr(case_obj, "validate", {})
+
+    logger.info(f"▶️  执行用例: {case_title}")
+
     try:
-        # 1. 初始化请求工具
-        req_util = RequestUtil()
+        # 校验请求信息
+        if not request_info:
+            raise ValueError("request 信息为空")
 
-        # 2. 提取参数
-        case_name = test_case.title
-        request_info = test_case.request
-        extract_info = test_case.extract
-        validate_info = test_case.validate
+        method = request_info.get("method", "get")
+        url = request_info.get("url", "")
 
-        # 3. 发送请求
+        # 构造请求参数（排除 method/url）
+        req_kwargs = {k: v for k, v in request_info.items() if k not in ("method", "url")}
 
-        res = req_util.send_all_request(**request_info)
+        # 发送请求
+        response = request_engine.send(method, url, **req_kwargs)
+        if response is None:
+            raise RuntimeError("请求返回为空")
 
-        # 4. 提取响应数据（如需）
+        # 提取响应数据
         if extract_info:
-            extract_res_info(res, extract_info, case_name)
+            extract_engine.extract_response_info(response, extract_info)
 
-        # 5. 校验响应（如需）
+        # 校验响应
         if validate_info:
-            validate_result = True
-            fail_reason = ""
-            # 示例：校验状态码
-            if 'status_code' in validate_info:
-                expect_code = validate_info['status_code']
-                actual_code = res.status_code
-                if actual_code != expect_code:
-                    validate_result = False
-                    fail_reason = f"状态码校验失败，期望{expect_code}，实际{actual_code}"
+            validator = ResponseValidator(response)
+            validator.validate(validate_info)
 
-            # 示例：校验响应字段（JSONPath）
-            if 'json_rule' in validate_info and validate_result:
-                json_rule = validate_info['json_rule']
-                expect_value = validate_info['expect_value']
-                actual_value = get_data('json', res.json(), json_rule)
-                if actual_value != expect_value:
-                    validate_result = False
-                    fail_reason = f"JSON字段校验失败，期望{expect_value}，实际{actual_value}"
+        logger.info(f"✅ 用例执行成功: {case_title}")
+        return {"title": case_title, "status": "passed"}
 
-            if not validate_result:
-                return {
-                    'case_name': case_name,
-                    'status': 'failed',
-                    'reason': fail_reason,
-                    'response': res.text
-                }
+    except AssertionError as e:
+        logger.error(f"❌ 断言失败 [{case_title}]: {e}")
+        raise
 
-        # 6. 执行成功
-        logger.info(f"用例：【{case_name}】执行成功")
-        return {
-            'case_name': case_name,
-            'status': 'success',
-            'response': res.text,
-            'status_code': res.status_code
-        }
     except Exception as e:
-        logger.error(f"用例执行异常：{str(e)}", exc_info=True)
-        return {
-            'case_name': test_case.get('case_name', '未命名用例'),
-            'status': 'error',
-            'reason': str(e)
-        }
+        logger.error(f"❌ 用例执行异常 [{case_title}]: {e}", exc_info=True)
+        raise
+
+
+def run_smoke():
+    """运行冒烟测试 - 预留入口"""
+    logger.info("运行冒烟测试...")
+    # TODO: 支持 -m smoke 标记
+    pass
+
+
+def cleanup():
+    """测试后清理"""
+    request_engine.close()
+    logger.info("测试资源已释放")

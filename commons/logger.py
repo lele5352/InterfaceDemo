@@ -49,10 +49,10 @@ def _get_logger():
     )
 
     # 5. 控制台 Handler（INFO 级别，简洁输出）
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(formatter)
-    _logger.addHandler(console_handler)
+    # console_handler = logging.StreamHandler(sys.stdout)
+    # console_handler.setLevel(logging.INFO)
+    # console_handler.setFormatter(formatter)
+    # _logger.addHandler(console_handler)
 
     # 6. 文件 Handler（DEBUG 级别，自动轮转）
     try:

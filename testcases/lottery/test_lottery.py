@@ -4,7 +4,7 @@ import jsonpath
 import pytest
 
 import testcases
-from commons.extract_util import write_yaml, read_yaml, read_testcase
+from commons.extract_util import extract_util
 from commons.request_util import RequestUtil
 
 
@@ -24,7 +24,7 @@ class AAALottery():
         ssq_id = jsonpath.jsonpath(result, "$.result[0]['lottery_id']")
 
         print(11111111, ssq_id[0])
-        write_yaml({"ssq_id": ssq_id[0]})
+        extract_util.write_yaml({"ssq_id": ssq_id[0]})
 
 
 

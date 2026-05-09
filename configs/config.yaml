@@ -1,0 +1,17 @@
+base_urls:
+  dev: "http://dev.api.example.com"
+  test: "https://cy.weather.com.cn"
+  prod: "https://api.example.com"
+
+headers:
+  dev:
+    Content-Type: "application/json"
+    Authorization: "Bearer {{token}}"
+  test:
+    Content-Type: "application/json"
+    Authorization: "Bearer {{token}}"
+
+PROJECT_NAME: "接口自动化测试demo"
+
+timeout: 10
+retry_count: 3
